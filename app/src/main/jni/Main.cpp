@@ -17,23 +17,26 @@
 #include "Includes/Logger.h"
 #include "Includes/obfuscate.h"
 #include "Includes/Utils.h"
-
+#include "NepAU/src/NepAu.h"
 #include "KittyMemory/MemoryPatch.h"
 #include "And64InlineHook/And64InlineHook.hpp"
 #include "Menu.h"
 
 
-#define targetLibName OBFUSCATE("libFileA.so")
+#define targetLibName OBFUSCATE("libil2cpp.so")
 
 #include "Includes/Macros.h"
 
 #include "JavaGPP/Interface/Interface.h"
 
+LibManager *lib;
 
 struct My_Patches {
     MemoryPatch xs;
 } hexPatches;
 
+
+void (*setTimeScale)(float);
 
 void *hack_thread(void *) {
     LOGI(OBFUSCATE("pthread created"));
@@ -42,6 +45,12 @@ void *hack_thread(void *) {
         sleep(1);
     } while (!isLibraryLoaded(targetLibName));
 
+    lib = new LibManager(targetLibName, LibType::Unity);
+
+    NClass Time = lib->get_class("UnityEngine", "Time");
+    auto setTimeScale_addr = Time.method("set_timeScale", 1);
+    LOGI("Addr: %p", setTimeScale_addr.addr());
+    setTimeScale = (void (*) (float))setTimeScale_addr.addr();
 
     LOGI(OBFUSCATE("%s has been loaded"), (const char *) targetLibName);
 
@@ -60,7 +69,9 @@ jobjectArray  getFeatureList(JNIEnv *env, jobject context) {
     jobjectArray ret;
 
     const char *features[] = {
+
             OBFUSCATE("Category_The Category"), //Not counted
+            OBFUSCATE("88_SeekBar_SpeedHack_1_10"),
             OBFUSCATE("Toggle_The toggle"),
             OBFUSCATE(
                     "100_Toggle_True_The toggle 2"), //This one have feature number assigned, and switched on by default
@@ -112,8 +123,11 @@ jobjectArray  getFeatureList(JNIEnv *env, jobject context) {
 void Changes(JNIEnv *env, jclass clazz, jobject obj, jint featNum, jstring featName, jint value, jboolean boolean, jstring str) {
 
     switch (featNum) {
-        case 1:
-
+        case 88:
+            if(setTimeScale) {
+                auto val = (float)value;
+                setTimeScale(val);
+            }
             break;
     }
 }
