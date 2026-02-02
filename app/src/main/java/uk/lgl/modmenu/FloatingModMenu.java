@@ -128,50 +128,50 @@ public class FloatingModMenu {
     }
 
 
-        private static FloatingModMenu instance;
+    private static FloatingModMenu instance;
 
-        public static void CreateMenu(final Context context) {
-            if (instance != null) return;
-            if (!(context instanceof Activity)) {
-                Handler handler = new Handler(Looper.getMainLooper());
-                handler.post(new Runnable() {
-					@Override
-					public void run() {
-							Activity activity = getTopActivity();
-							if (activity != null) {
-								instance = new FloatingModMenu(activity);
-							}
-					}
-				});
-            } else {
-                instance = new FloatingModMenu((Activity) context);
-            }
-        }
-
-        private static Activity getTopActivity() {
-            try {
-                Class<?> at = Class.forName("android.app.ActivityThread");
-                Method current = at.getDeclaredMethod("currentActivityThread");
-                current.setAccessible(true);
-                Object atObj = current.invoke(null);
-
-                Field activities = at.getDeclaredField("mActivities");
-                activities.setAccessible(true);
-                Map<?, ?> map = (Map<?, ?>) activities.get(atObj);
-
-                for (Object record : map.values()) {
-                    Class<?> ar = record.getClass();
-                    Field paused = ar.getDeclaredField("paused");
-                    paused.setAccessible(true);
-                    if (!paused.getBoolean(record)) {
-                        Field activity = ar.getDeclaredField("activity");
-                        activity.setAccessible(true);
-                        return (Activity) activity.get(record);
+    public static void CreateMenu(final Context context) {
+        if (instance != null) return;
+        if (!(context instanceof Activity)) {
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Activity activity = getTopActivity();
+                    if (activity != null) {
+                        instance = new FloatingModMenu(activity);
                     }
                 }
-            } catch (Throwable ignored) {}
-            return null;
+            });
+        } else {
+            instance = new FloatingModMenu((Activity) context);
         }
+    }
+
+    private static Activity getTopActivity() {
+        try {
+            Class<?> at = Class.forName("android.app.ActivityThread");
+            Method current = at.getDeclaredMethod("currentActivityThread");
+            current.setAccessible(true);
+            Object atObj = current.invoke(null);
+
+            Field activities = at.getDeclaredField("mActivities");
+            activities.setAccessible(true);
+            Map<?, ?> map = (Map<?, ?>) activities.get(atObj);
+
+            for (Object record : map.values()) {
+                Class<?> ar = record.getClass();
+                Field paused = ar.getDeclaredField("paused");
+                paused.setAccessible(true);
+                if (!paused.getBoolean(record)) {
+                    Field activity = ar.getDeclaredField("activity");
+                    activity.setAccessible(true);
+                    return (Activity) activity.get(record);
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
 
 
 
@@ -468,6 +468,42 @@ public class FloatingModMenu {
                 case "Toggle":
                     linearLayout.addView(Switch(featNum, strSplit[1], switchedOn));
                     break;
+                case "SeekBar":
+                    linearLayout.addView(SeekBar(featNum, strSplit[1], Integer.parseInt(strSplit[2]), Integer.parseInt(strSplit[3])));
+                    break;
+                case "Button":
+                    linearLayout.addView(Button(featNum, strSplit[1]));
+                    break;
+                case "ButtonOnOff":
+                    linearLayout.addView(ButtonOnOff(featNum, strSplit[1], switchedOn));
+                    break;
+                case "Spinner":
+                    linearLayout.addView(RichTextView(strSplit[1]));
+                    linearLayout.addView(Spinner(featNum, strSplit[1], strSplit[2]));
+                    break;
+                case "InputText":
+                    linearLayout.addView(TextField(featNum, strSplit[1], false, 0));
+                    break;
+                case "InputValue":
+                    if (strSplit.length == 3)
+                        linearLayout.addView(TextField(featNum, strSplit[2], true, Integer.parseInt(strSplit[1])));
+                    if (strSplit.length == 2)
+                        linearLayout.addView(TextField(featNum, strSplit[1], true, 0));
+                    break;
+                case "CheckBox":
+                    linearLayout.addView(CheckBox(featNum, strSplit[1], switchedOn));
+                    break;
+                case "RadioButton":
+                    linearLayout.addView(RadioButton(featNum, strSplit[1], strSplit[2]));
+                    break;
+                case "Collapse":
+                    Collapse(linearLayout, strSplit[1]);
+                    subFeat++;
+                    break;
+                case "ButtonLink":
+                    subFeat++;
+                    linearLayout.addView(ButtonLink(strSplit[1], strSplit[2]));
+                    break;
                 case "Category":
                     subFeat++;
                     linearLayout.addView(Category(strSplit[1]));
@@ -484,7 +520,7 @@ public class FloatingModMenu {
         }
     }
 
-    private View Switch(final int featNum, final String featName, boolean swiOn) {
+     private View Switch(final int featNum, final String featName, boolean swiOn) {
         final Switch switchR = new Switch(activity);
         ColorStateList buttonStates = new ColorStateList(
                 new int[][]{
@@ -506,20 +542,464 @@ public class FloatingModMenu {
         switchR.setText(featName);
         switchR.setTextColor(TEXT_COLOR_2);
         switchR.setPadding(10, 5, 0, 5);
-        switchR.setChecked(swiOn);
         switchR.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton compoundButton, boolean bool) {
-                switch (featNum) {
-                    case -1: //Save perferences
-                        if (bool == false)
-                        break;
-                    case -3:
-                        scrollView.setLayoutParams(bool ? scrlLLExpanded : scrlLL);
-                        break;
-                }
+                Changes(activity, featNum, featName, 0, bool, "");
             }
         });
         return switchR;
+     }
+    
+
+    private View SeekBar(final int featNum, final String featName, final int min, final int max) {
+        // Remove loadedProg since Changes is void
+        // Call Changes just to initialize if needed
+        Changes(activity, featNum, featName, min, false, "");
+
+        LinearLayout linearLayout = new LinearLayout(activity);
+        linearLayout.setPadding(10, 5, 0, 5);
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+        linearLayout.setGravity(Gravity.CENTER);
+
+        final TextView textView = new TextView(activity);
+        textView.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + min + "</font>"));
+        textView.setTextColor(TEXT_COLOR_2);
+
+        SeekBar seekBar = new SeekBar(activity);
+        seekBar.setPadding(25, 10, 35, 10);
+        seekBar.setMax(max);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            seekBar.setMin(min); // setMin for Oreo and above
+        seekBar.setProgress(min);
+        seekBar.getThumb().setColorFilter(SeekBarColor, PorterDuff.Mode.SRC_ATOP);
+        seekBar.getProgressDrawable().setColorFilter(SeekBarProgressColor, PorterDuff.Mode.SRC_ATOP);
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // optional
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // optional
+            }
+
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int finalProgress = progress < min ? min : progress;
+                seekBar.setProgress(finalProgress);
+
+                // Call Changes with 6 parameters
+                Changes(activity, featNum, featName, finalProgress, false, "");
+
+                // Update TextView
+                textView.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + finalProgress + "</font>"));
+            }
+        });
+
+        linearLayout.addView(textView);
+        linearLayout.addView(seekBar);
+
+        return linearLayout;
+    }
+
+
+    private View Button(final int featNum, final String featName) {
+        final Button button = new Button(activity);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        layoutParams.setMargins(7, 5, 7, 5);
+        button.setLayoutParams(layoutParams);
+        button.setTextColor(TEXT_COLOR_2);
+        button.setAllCaps(false); //Disable caps to support html
+        button.setText(Html.fromHtml(featName));
+        button.setBackgroundColor(BTN_COLOR);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                switch (featNum) {
+                    case -4:
+                        break;
+                    case -5:
+                        break;
+                    case -6:
+                        scrollView.removeView(mSettings);
+                        scrollView.addView(patches);
+                        break;
+                    case -100:
+                        stopChecking = true;
+                        break;
+                }
+                Changes(activity, featNum, featName, 0, false, "");
+
+            }
+        });
+
+        return button;
+    }
+
+    private View ButtonLink(final String featName, final String url) {
+        final Button button = new Button(activity);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        layoutParams.setMargins(7, 5, 7, 5);
+        button.setLayoutParams(layoutParams);
+        button.setAllCaps(false); //Disable caps to support html
+        button.setTextColor(TEXT_COLOR_2);
+        button.setText(Html.fromHtml(featName));
+        button.setBackgroundColor(BTN_COLOR);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.setData(Uri.parse(url));
+                activity.startActivity(intent);
+            }
+        });
+        return button;
+    }
+
+    private View ButtonOnOff(final int featNum, String featName, boolean switchedOn) {
+        final Button button = new Button(activity);
+
+        // Layout setup
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT // Changed from MATCH_PARENT for better button size
+        );
+        layoutParams.setMargins(7, 5, 7, 5);
+        button.setLayoutParams(layoutParams);
+        button.setTextColor(TEXT_COLOR_2);
+        button.setAllCaps(false); // Disable caps to support HTML
+
+        final String finalFeatName = featName.replace("OnOff_", "");
+
+        // Local state
+        final boolean[] isOn = {switchedOn}; // use array to allow modification inside OnClickListener
+
+        // Initialize button appearance
+        if (isOn[0]) {
+            button.setText(Html.fromHtml(finalFeatName + ": ON"));
+            button.setBackgroundColor(BtnON);
+        } else {
+            button.setText(Html.fromHtml(finalFeatName + ": OFF"));
+            button.setBackgroundColor(BtnOFF);
+        }
+
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Call your native method
+                // Fill in placeholders for int and String parameters your native method requires
+                Changes(activity, featNum, finalFeatName, 0, isOn[0], "");
+
+                // Toggle local state
+                isOn[0] = !isOn[0];
+
+                // Update button text and color
+                if (isOn[0]) {
+                    button.setText(Html.fromHtml(finalFeatName + ": ON"));
+                    button.setBackgroundColor(BtnON);
+                } else {
+                    button.setText(Html.fromHtml(finalFeatName + ": OFF"));
+                    button.setBackgroundColor(BtnOFF);
+                }
+            }
+        });
+
+        return button;
+    }
+
+
+    private View Spinner(final int featNum, final String featName, final String list) {
+        final List<String> lists = new LinkedList<>(Arrays.asList(list.split(",")));
+
+        // Create LinearLayout wrapper
+        LinearLayout linearLayout2 = new LinearLayout(activity);
+        LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        layoutParams2.setMargins(7, 2, 7, 5);
+        linearLayout2.setOrientation(LinearLayout.VERTICAL);
+        linearLayout2.setBackgroundColor(BTN_COLOR);
+        linearLayout2.setLayoutParams(layoutParams2);
+
+        final Spinner spinner = new Spinner(activity, Spinner.MODE_DROPDOWN);
+        spinner.setLayoutParams(layoutParams2);
+
+        // Proper color for arrow
+        spinner.getBackground().setColorFilter(TEXT_COLOR_2, PorterDuff.Mode.SRC_ATOP);
+
+        ArrayAdapter<String> aa = new ArrayAdapter<>(activity,
+                android.R.layout.simple_spinner_dropdown_item, lists);
+        aa.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(aa);
+
+        // Set initial selection based on featName
+        int initialPos = lists.indexOf(featName);
+        if (initialPos >= 0) {
+            spinner.setSelection(initialPos);
+        }
+
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
+                String selected = spinner.getSelectedItem().toString();
+
+                // Call native method (fill dummy values for missing parameters for now)
+                Changes(activity, featNum, selected, position, true, "");
+
+                // Change text color of selected item
+                if (parentView.getChildAt(0) instanceof TextView) {
+                    ((TextView) parentView.getChildAt(0)).setTextColor(TEXT_COLOR_2);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+        linearLayout2.addView(spinner);
+        return linearLayout2;
+    }
+
+
+    private View TextField(final int featNum, final String featName, final boolean numOnly, final int maxValue) {
+        final EditTextString edittextstring = new EditTextString();
+        final EditTextNum edittextnum = new EditTextNum();
+        LinearLayout linearLayout = new LinearLayout(activity);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        layoutParams.setMargins(7, 5, 7, 5);
+
+        final Button button = new Button(activity);
+        if (numOnly) {
+            int num = 0;
+            edittextnum.setNum((num == 0) ? 1 : num);
+            button.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + ((num == 0) ? 1 : num) + "</font>"));
+        } else {
+            String string = "";
+            edittextstring.setString((string == "") ? "" : string);
+            button.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + string + "</font>"));
+        }
+        button.setAllCaps(false);
+        button.setLayoutParams(layoutParams);
+        button.setBackgroundColor(BTN_COLOR);
+        button.setTextColor(TEXT_COLOR_2);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+               Toast.makeText(activity,  "Button clicked", Toast.LENGTH_SHORT).show();
+                final AlertDialog alert = new AlertDialog.Builder(activity, 2).create();
+                alert.setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @SuppressLint("WrongConstant")
+                    public void onCancel(DialogInterface dialog) {
+                        InputMethodManager imm = (InputMethodManager) activity.getSystemService(activity.INPUT_METHOD_SERVICE);
+                        imm.toggleSoftInput(InputMethodManager.HIDE_IMPLICIT_ONLY, 0);
+                    }
+                });
+
+                //LinearLayout
+                LinearLayout linearLayout1 = new LinearLayout(activity);
+                linearLayout1.setPadding(5, 5, 5, 5);
+                linearLayout1.setOrientation(LinearLayout.VERTICAL);
+                linearLayout1.setBackgroundColor(MENU_FEATURE_BG_COLOR);
+
+                //TextView
+                final TextView TextViewNote = new TextView(activity);
+                TextViewNote.setText("Tap OK to apply changes. Tap outside to cancel");
+                if (maxValue != 0)
+                    TextViewNote.setText("Tap OK to apply changes. Tap outside to cancel\nMax value: " + maxValue);
+                TextViewNote.setTextColor(TEXT_COLOR_2);
+
+                //Edit text
+                final EditText edittext = new EditText(activity);
+                edittext.setMaxLines(1);
+                edittext.setWidth(convertDipToPixels(300));
+                edittext.setTextColor(TEXT_COLOR_2);
+                if (numOnly) {
+                    edittext.setInputType(InputType.TYPE_CLASS_NUMBER);
+                    edittext.setKeyListener(DigitsKeyListener.getInstance("0123456789-"));
+                    InputFilter[] FilterArray = new InputFilter[1];
+                    FilterArray[0] = new InputFilter.LengthFilter(10);
+                    edittext.setFilters(FilterArray);
+                } else {
+                    edittext.setText(edittextstring.getString());
+                }
+                edittext.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+                    @SuppressLint("WrongConstant")
+                    @Override
+                    public void onFocusChange(View v, boolean hasFocus) {
+                        InputMethodManager imm = (InputMethodManager) activity.getSystemService(activity.INPUT_METHOD_SERVICE);
+                        if (hasFocus) {
+                            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
+                        } else {
+                            imm.toggleSoftInput(InputMethodManager.HIDE_IMPLICIT_ONLY, 0);
+                        }
+                    }
+                });
+                edittext.requestFocus();
+
+                //Button
+                Button btndialog = new Button(activity);
+                btndialog.setBackgroundColor(BTN_COLOR);
+                btndialog.setTextColor(TEXT_COLOR_2);
+                btndialog.setText("OK");
+                btndialog.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (numOnly) {
+                            int num;
+                            try {
+                                num = Integer.parseInt(TextUtils.isEmpty(edittext.getText().toString()) ? "0" : edittext.getText().toString());
+                                if (maxValue != 0 &&  num >= maxValue)
+                                    num = maxValue;
+                            } catch (NumberFormatException ex) {
+                                num = 2147483640;
+                            }
+                            edittextnum.setNum(num);
+                            button.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + num + "</font>"));
+                            alert.dismiss();
+                            Changes(activity, featNum, featName, num, false, "");
+                           // Preferences.changeFeatureInt(featName, featNum, num);
+                        } else {
+                            String str = edittext.getText().toString();
+                            edittextstring.setString(edittext.getText().toString());
+                            button.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + str + "</font>"));
+                            alert.dismiss();
+                            Changes(activity, featNum, featName, 0, false, str);
+                            //Preferences.changeFeatureString(featName, featNum, str);
+                        }
+                        edittext.setFocusable(false);
+                    }
+                });
+
+                linearLayout1.addView(TextViewNote);
+                linearLayout1.addView(edittext);
+                linearLayout1.addView(btndialog);
+                alert.setView(linearLayout1);
+                alert.show();
+            }
+        });
+
+        linearLayout.addView(button);
+        return linearLayout;
+    }
+
+
+
+    private View CheckBox(final int featNum, final String featName, boolean switchedOn) {
+        final CheckBox checkBox = new CheckBox(activity);
+        checkBox.setText(featName);
+        checkBox.setTextColor(TEXT_COLOR_2);
+
+        // Set button tint for Lollipop and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            checkBox.setButtonTintList(ColorStateList.valueOf(CheckBoxColor));
+        }
+
+        // Set initial checked state
+        checkBox.setChecked(switchedOn);
+
+        checkBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // Corrected call with all 6 parameters
+                Changes(activity, featNum, featName, 0, isChecked, "");
+            }
+        });
+
+        return checkBox;
+    }
+
+
+    // Map to store selected index for each feature
+
+
+    private View RadioButton(final int featNum, final String featName, final String list) {
+        final List<String> options = new LinkedList<>(Arrays.asList(list.split(",")));
+        Map<Integer, Integer> savedIndexes = new HashMap<>();
+        final TextView textView = new TextView(activity);
+        textView.setText(featName + ":");
+        textView.setTextColor(TEXT_COLOR_2);
+
+        final RadioGroup radioGroup = new RadioGroup(activity);
+        radioGroup.setPadding(10, 5, 10, 5);
+        radioGroup.setOrientation(LinearLayout.VERTICAL);
+        radioGroup.addView(textView);
+
+        for (int i = 0; i < options.size(); i++) {
+            final RadioButton radioButton = new RadioButton(activity);
+            final String optionName = options.get(i);
+            final int index = i;
+
+            radioButton.setText(optionName);
+            radioButton.setTextColor(Color.LTGRAY);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+                radioButton.setButtonTintList(ColorStateList.valueOf(RadioColor));
+
+            radioButton.setOnClickListener(v -> {
+                textView.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + optionName));
+                Changes(activity, featNum, featName, index, false, "");
+                savedIndexes.put(featNum, index);
+            });
+
+            radioGroup.addView(radioButton);
+        }
+        int savedIndex = savedIndexes.getOrDefault(featNum, -1);
+        if (savedIndex >= 0 && savedIndex < radioGroup.getChildCount()) {
+            RadioButton savedRadio = (RadioButton) radioGroup.getChildAt(savedIndex + 1); // +1 because first child is TextView
+            savedRadio.setChecked(true);
+            textView.setText(Html.fromHtml(featName + ": <font color='" + NumberTxtColor + "'>" + options.get(savedIndex)));
+        }
+
+        return radioGroup;
+    }
+
+
+    private void Collapse(LinearLayout linLayout, final String text) {
+        LinearLayout.LayoutParams layoutParamsLL = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        layoutParamsLL.setMargins(0, 5, 0, 0);
+
+        LinearLayout collapse = new LinearLayout(activity);
+        collapse.setLayoutParams(layoutParamsLL);
+        collapse.setVerticalGravity(16);
+        collapse.setOrientation(LinearLayout.VERTICAL);
+
+        final LinearLayout collapseSub = new LinearLayout(activity);
+        collapseSub.setVerticalGravity(16);
+        collapseSub.setPadding(0, 5, 0, 5);
+        collapseSub.setOrientation(LinearLayout.VERTICAL);
+        collapseSub.setBackgroundColor(Color.parseColor("#222D38"));
+        collapseSub.setVisibility(View.GONE);
+        mCollapse = collapseSub;
+
+        final TextView textView = new TextView(activity);
+        textView.setBackgroundColor(CategoryBG);
+        textView.setText("▽ " + text + " ▽");
+        textView.setGravity(Gravity.CENTER);
+        textView.setTextColor(TEXT_COLOR_2);
+        textView.setTypeface(null, Typeface.BOLD);
+        textView.setPadding(0, 20, 0, 20);
+        textView.setOnClickListener(new View.OnClickListener() {
+            boolean isChecked;
+
+            @Override
+            public void onClick(View v) {
+
+                boolean z = !this.isChecked;
+                this.isChecked = z;
+                if (z) {
+                    collapseSub.setVisibility(View.VISIBLE);
+                    textView.setText("△ " + text + " △");
+                    return;
+                }
+                collapseSub.setVisibility(View.GONE);
+                textView.setText("▽ " + text + " ▽");
+            }
+        });
+        collapse.addView(textView);
+        collapse.addView(collapseSub);
+        linLayout.addView(collapse);
     }
 
     private View Category(String text) {
@@ -549,7 +1029,29 @@ public class FloatingModMenu {
         return wView;
     }
 
+    private class EditTextString {
+        private String text;
 
+        public void setString(String s) {
+            text = s;
+        }
+
+        public String getString() {
+            return text;
+        }
+    }
+
+    private class EditTextNum {
+        private int val;
+
+        public void setNum(int i) {
+            val = i;
+        }
+
+        public int getNum() {
+            return val;
+        }
+    }
 
 
     private boolean isViewCollapsed() {
